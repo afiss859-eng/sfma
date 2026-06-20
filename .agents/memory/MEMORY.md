@@ -1,0 +1,1 @@
+- [SFMA accounts](sfma-accounts.md) — 11 comptes officiels avec mot de passe sfma2026, seed au démarrage api-server

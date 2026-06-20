@@ -16,6 +16,7 @@ import Polls from "@/pages/Polls";
 import Events from "@/pages/Events";
 import Gallery from "@/pages/Gallery";
 import Admin from "@/pages/Admin";
+import ProfileEdit from "@/pages/ProfileEdit";
 import NotFound from "@/pages/not-found";
 import { useLocation } from "wouter";
 
@@ -79,6 +80,9 @@ function Router() {
       </Route>
       <Route path="/admin">
         {() => <LordRoute component={Admin} />}
+      </Route>
+      <Route path="/profile-edit">
+        {() => <ProtectedRoute component={ProfileEdit} />}
       </Route>
       <Route component={NotFound} />
     </Switch>

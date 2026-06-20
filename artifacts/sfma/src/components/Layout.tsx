@@ -11,6 +11,7 @@ const NAV_ITEMS = [
   { href: "/gallery", label: "Galerie", icon: "🖼️" },
   { href: "/dashboard", label: "Stats", icon: "📈" },
   { href: "/card", label: "Ma Carte", icon: "🪪" },
+  { href: "/profile-edit", label: "Mon Profil", icon: "✏️" },
 ];
 
 interface LayoutProps {

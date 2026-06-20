@@ -20,12 +20,20 @@ router.get("/:id", async (req, res) => {
   res.json(formatMember(member));
 });
 
-router.patch("/:id", requireAuth, requireLord, async (req: AuthRequest, res) => {
-  const { grade, bio, country } = req.body;
+router.patch("/:id", requireAuth, async (req: AuthRequest, res) => {
+  // Lords can edit anyone; regular members can only edit themselves
+  const lordGrades = ["Fondateur_Suprême", "Co-Fondateur", "Lord", "Administrateur"];
+  const isLord = lordGrades.includes(req.memberGrade || "");
+  if (!isLord && req.memberId !== req.params.id) {
+    res.status(403).json({ error: "Forbidden" });
+    return;
+  }
+  const { grade, bio, country, whatsapp } = req.body;
   const updates: any = {};
   if (grade !== undefined) updates.grade = grade;
   if (bio !== undefined) updates.bio = bio;
   if (country !== undefined) updates.country = country;
+  if (whatsapp !== undefined) updates.whatsapp = whatsapp;
 
   const [updated] = await db.update(membersTable).set(updates).where(eq(membersTable.id, req.params.id)).returning();
   if (!updated) {

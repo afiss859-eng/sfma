@@ -18,3 +18,23 @@ expertMode = true
 [postMerge]
 path = "scripts/post-merge.sh"
 timeoutMs = 20000
+
+[[ports]]
+localPort = 8080
+externalPort = 8080
+
+[[ports]]
+localPort = 8081
+externalPort = 80
+
+[[ports]]
+localPort = 18668
+externalPort = 3000
+
+[userenv]
+
+[userenv.shared]
+VITE_SUPABASE_URL = "https://sashppkgkmqverapgiws.supabase.co"
+VITE_SUPABASE_ANON_KEY = "sb_publishable_tKF0b30idcs3BfjLUZUytQ_ntkMmqz6"
+SUPABASE_URL = "https://sashppkgkmqverapgiws.supabase.co"
+SUPABASE_ANON_KEY = "sb_publishable_tKF0b30idcs3BfjLUZUytQ_ntkMmqz6"

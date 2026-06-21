@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { motion, AnimatePresence } from "framer-motion";
 import { useListGroups, useGetGroupMessages, useSendMessage, useAddReaction, getGetGroupMessagesQueryKey } from "@workspace/api-client-react";
 import { useQueryClient } from "@tanstack/react-query";
 import { useAuth } from "@/context/AuthContext";
@@ -6,7 +7,19 @@ import { supabase } from "@/lib/supabase";
 import GradeBadge from "@/components/GradeBadge";
 import Layout from "@/components/Layout";
 
-const EMOJIS = ["👍", "❤️", "🔥", "😂", "😮", "👑", "⚔️"];
+const EMOJIS = ["👍", "❤️", "🔥", "😂", "😮", "👑", "⚔️", "💀"];
+
+function Avatar({ author }: { author: any }) {
+  if (author?.avatarUrl) {
+    return <img src={author.avatarUrl} alt={author.username} className="w-8 h-8 rounded-full object-cover border border-yellow-600/40 flex-shrink-0" />;
+  }
+  return (
+    <div className="w-8 h-8 rounded-full flex items-center justify-center border border-red-900/50 flex-shrink-0 text-sm"
+      style={{ background: "linear-gradient(135deg, #1a0000, #0a0a0f)" }}>
+      {author?.gradeEmoji || "👤"}
+    </div>
+  );
+}
 
 export default function Chat() {
   const { user } = useAuth();
@@ -15,7 +28,10 @@ export default function Chat() {
   const [message, setMessage] = useState("");
   const [replyTo, setReplyTo] = useState<any>(null);
   const [showEmoji, setShowEmoji] = useState<string | null>(null);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [showMentions, setShowMentions] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const inputRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
 
   const { data: messages } = useGetGroupMessages(activeGroupId, {
@@ -35,7 +51,6 @@ export default function Chat() {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [messages]);
 
-  // Real-time Supabase subscription
   useEffect(() => {
     if (!activeGroupId) return;
     const channel = supabase
@@ -47,15 +62,32 @@ export default function Chat() {
     return () => { supabase.removeChannel(channel); };
   }, [activeGroupId, queryClient]);
 
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const val = e.target.value;
+    setMessage(val);
+    const atIdx = val.lastIndexOf("@");
+    if (atIdx !== -1 && atIdx === val.length - 1) {
+      setShowMentions(true);
+      setMentionQuery("");
+    } else if (atIdx !== -1 && val.slice(atIdx + 1).match(/^\w*$/)) {
+      setShowMentions(true);
+      setMentionQuery(val.slice(atIdx + 1));
+    } else {
+      setShowMentions(false);
+    }
+  };
+
   const handleSend = (e: React.FormEvent) => {
     e.preventDefault();
     if (!message.trim() || !activeGroupId) return;
+    const mentions = [...message.matchAll(/@(\w+)/g)].map(m => m[1]);
     sendMutation.mutate(
-      { id: activeGroupId, data: { content: message.trim(), replyToId: replyTo?.id || null, mentions: [] } },
+      { id: activeGroupId, data: { content: message.trim(), replyToId: replyTo?.id || null, mentions } },
       {
         onSuccess: () => {
           setMessage("");
           setReplyTo(null);
+          setShowMentions(false);
           queryClient.invalidateQueries({ queryKey: getGetGroupMessagesQueryKey(activeGroupId) });
         },
       }
@@ -70,19 +102,36 @@ export default function Chat() {
   };
 
   const activeGroup = groups?.find(g => g.id === activeGroupId);
+  const authorsList = messages ? [...new Map((messages as any[]).map(m => [m.author?.username, m.author?.username])).values()].filter(Boolean) : [];
+  const filteredMentions = authorsList.filter((u: any) => u !== user?.username && u.toLowerCase().includes(mentionQuery.toLowerCase()));
+
+  const isMe = (msg: any) => msg.author?.id === user?.id || msg.author?.username === user?.username;
+
+  const formatTime = (ts: string) => ts ? new Date(ts).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : "";
+
+  const renderContent = (content: string) => {
+    const parts = content.split(/(@\w+)/g);
+    return parts.map((part, i) =>
+      part.startsWith("@") ? (
+        <span key={i} className="text-yellow-400 font-semibold bg-yellow-900/20 rounded px-0.5">{part}</span>
+      ) : part
+    );
+  };
 
   return (
     <Layout>
       <div className="flex h-[calc(100vh-60px)]">
-        {/* Sidebar */}
-        <aside className="w-20 md:w-64 border-r border-red-900/20 flex flex-col bg-[#0A0A0F]/80 overflow-y-auto">
-          <div className="p-3 border-b border-red-900/20">
-            <h2 className="sfma-title text-yellow-400 text-xs font-bold hidden md:block">GROUPES</h2>
+        {/* Sidebar groupes */}
+        <aside className="w-16 md:w-60 border-r border-red-900/20 flex flex-col bg-[#0A0A0F]/90 overflow-y-auto flex-shrink-0">
+          <div className="p-3 border-b border-red-900/20 hidden md:block">
+            <h2 className="sfma-title text-yellow-400 text-xs font-bold tracking-widest">GROUPES</h2>
           </div>
-          {groups?.map(group => (
-            <button
+          {groups?.map((group, i) => (
+            <motion.button
               key={group.id}
-              data-testid={`group-${group.id}`}
+              initial={{ opacity: 0, x: -20 }}
+              animate={{ opacity: 1, x: 0 }}
+              transition={{ delay: i * 0.05 }}
               onClick={() => setActiveGroupId(group.id)}
               className={`flex items-center gap-3 px-3 py-3 transition-all hover:bg-yellow-900/10 border-l-2 ${
                 activeGroupId === group.id ? "border-yellow-600 bg-yellow-900/10" : "border-transparent"
@@ -90,136 +139,221 @@ export default function Chat() {
             >
               <span className="text-xl">{group.emoji}</span>
               <span className="hidden md:block text-sm text-gray-300 truncate">{group.name}</span>
-            </button>
+            </motion.button>
           ))}
         </aside>
 
-        {/* Messages area */}
-        <div className="flex-1 flex flex-col min-w-0">
-          {/* Group header */}
+        {/* Zone messages */}
+        <div className="flex-1 flex flex-col min-w-0 relative">
+          {/* Header groupe */}
           {activeGroup && (
-            <div className="px-4 py-3 border-b border-red-900/20 glass-panel flex items-center gap-3">
-              <span className="text-xl">{activeGroup.emoji}</span>
+            <motion.div
+              initial={{ opacity: 0, y: -10 }}
+              animate={{ opacity: 1, y: 0 }}
+              className="px-4 py-3 border-b border-red-900/20 flex items-center gap-3"
+              style={{ background: "rgba(10,10,15,0.95)", backdropFilter: "blur(10px)" }}
+            >
+              <span className="text-2xl">{activeGroup.emoji}</span>
               <div>
                 <h3 className="sfma-title text-yellow-400 text-sm font-bold">{activeGroup.name}</h3>
                 <p className="text-gray-500 text-xs hidden md:block">{activeGroup.description}</p>
               </div>
-            </div>
+              <div className="ml-auto flex items-center gap-2">
+                <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+                <span className="text-gray-500 text-xs hidden md:block">En ligne</span>
+              </div>
+            </motion.div>
           )}
 
-          {/* Messages list */}
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          {/* Messages */}
+          <div className="flex-1 overflow-y-auto p-3 space-y-1" style={{ background: "radial-gradient(ellipse at center, rgba(139,0,0,0.03) 0%, transparent 70%)" }}>
             {!activeGroupId && (
               <div className="flex items-center justify-center h-full text-gray-600 text-sm">
                 Sélectionnez un groupe
               </div>
             )}
-            {messages?.map((msg: any) => (
-              <div key={msg.id} className="message-enter group flex gap-3">
-                {/* Avatar */}
-                <div className="flex-shrink-0">
-                  {msg.author?.avatarUrl ? (
-                    <img src={msg.author.avatarUrl} alt={msg.author.username} className="w-9 h-9 rounded-full object-cover border border-red-900/40" />
-                  ) : (
-                    <div className="w-9 h-9 rounded-full flex items-center justify-center border border-red-900/40 text-sm"
-                      style={{ background: "linear-gradient(135deg, #1a0000, #0a0a0f)" }}>
-                      {msg.author?.gradeEmoji || "👤"}
-                    </div>
-                  )}
-                </div>
+            <AnimatePresence initial={false}>
+              {(messages as any[])?.map((msg: any, idx: number) => {
+                const mine = isMe(msg);
+                const showAvatar = !mine;
+                return (
+                  <motion.div
+                    key={msg.id}
+                    initial={{ opacity: 0, y: 10, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    transition={{ duration: 0.2, ease: "easeOut" }}
+                    className={`flex items-end gap-2 group ${mine ? "flex-row-reverse" : "flex-row"}`}
+                  >
+                    {/* Avatar (only for others) */}
+                    {showAvatar ? <Avatar author={msg.author} /> : <div className="w-8 flex-shrink-0" />}
 
-                <div className="flex-1 min-w-0">
-                  {/* Header */}
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className="text-white text-sm font-medium">{msg.author?.username}</span>
-                    <GradeBadge grade={msg.author?.grade} emoji={msg.author?.gradeEmoji} size="sm" />
-                    <span className="text-gray-600 text-xs">
-                      {msg.createdAt ? new Date(msg.createdAt).toLocaleTimeString("fr-FR", { hour: "2-digit", minute: "2-digit" }) : ""}
-                    </span>
-                  </div>
+                    <div className={`flex flex-col max-w-[75%] md:max-w-[60%] ${mine ? "items-end" : "items-start"}`}>
+                      {/* Nom + grade (pour les autres) */}
+                      {!mine && (
+                        <div className="flex items-center gap-1.5 mb-0.5 px-1">
+                          <span className="text-xs font-semibold text-yellow-400">{msg.author?.username}</span>
+                          <GradeBadge grade={msg.author?.grade} emoji={msg.author?.gradeEmoji} size="sm" />
+                        </div>
+                      )}
 
-                  {/* Reply */}
-                  {msg.replyTo && (
-                    <div className="mb-1 pl-3 border-l-2 border-yellow-700/50 text-gray-500 text-xs truncate">
-                      ↩ <span className="text-gray-400">{msg.replyTo.authorUsername}</span>: {msg.replyTo.content}
-                    </div>
-                  )}
+                      {/* Réponse citée */}
+                      {msg.replyTo && (
+                        <div className={`mb-1 px-2 py-1 rounded-lg border-l-2 border-yellow-600/60 bg-black/30 text-xs text-gray-400 max-w-full truncate ${mine ? "text-right" : ""}`}>
+                          ↩ <span className="text-yellow-500">{msg.replyTo.authorUsername}:</span> {msg.replyTo.content}
+                        </div>
+                      )}
 
-                  {/* Content */}
-                  <p className="text-gray-200 text-sm break-words">{msg.content}</p>
+                      {/* Bulle de message */}
+                      <div
+                        className={`relative px-3 py-2 rounded-2xl text-sm leading-relaxed break-words ${
+                          mine
+                            ? "rounded-br-sm text-white"
+                            : "rounded-bl-sm text-gray-100"
+                        }`}
+                        style={mine
+                          ? { background: "linear-gradient(135deg, #8B0000, #CC0000)", boxShadow: "0 2px 8px rgba(204,0,0,0.3)" }
+                          : { background: "rgba(255,255,255,0.06)", border: "1px solid rgba(255,255,255,0.08)" }
+                        }
+                      >
+                        {renderContent(msg.content)}
 
-                  {/* Reactions */}
-                  {msg.reactions && msg.reactions.length > 0 && (
-                    <div className="flex flex-wrap gap-1 mt-1">
-                      {msg.reactions.map((r: any) => (
-                        <button
-                          key={r.emoji}
-                          onClick={() => handleReaction(msg.id, r.emoji)}
-                          className={`text-xs px-2 py-0.5 rounded-full border transition-all hover:scale-110 ${
-                            r.userIds?.includes(user?.id) ? "border-yellow-600 bg-yellow-900/20 text-yellow-400" : "border-gray-700 bg-gray-900/50 text-gray-300"
-                          }`}
-                        >
-                          {r.emoji} {r.count}
+                        {/* Heure + statut */}
+                        <div className={`flex items-center gap-1 mt-0.5 ${mine ? "justify-end" : "justify-start"}`}>
+                          <span className="text-[10px] opacity-50">{formatTime(msg.createdAt)}</span>
+                          {mine && <span className="text-[10px] opacity-60">✓✓</span>}
+                        </div>
+                      </div>
+
+                      {/* Réactions */}
+                      {msg.reactions && msg.reactions.length > 0 && (
+                        <div className="flex flex-wrap gap-1 mt-1">
+                          {msg.reactions.map((r: any) => (
+                            <motion.button
+                              key={r.emoji}
+                              whileHover={{ scale: 1.2 }}
+                              whileTap={{ scale: 0.9 }}
+                              onClick={() => handleReaction(msg.id, r.emoji)}
+                              className={`text-xs px-2 py-0.5 rounded-full border transition-all ${
+                                r.userIds?.includes(user?.id) ? "border-yellow-600 bg-yellow-900/30 text-yellow-400" : "border-gray-700 bg-gray-900/60 text-gray-300"
+                              }`}
+                            >
+                              {r.emoji} {r.count}
+                            </motion.button>
+                          ))}
+                        </div>
+                      )}
+
+                      {/* Actions hover */}
+                      <div className={`hidden group-hover:flex items-center gap-1 mt-1 ${mine ? "flex-row-reverse" : ""}`}>
+                        <button onClick={() => setShowEmoji(showEmoji === msg.id ? null : msg.id)}
+                          className="text-[11px] text-gray-600 hover:text-yellow-400 transition-colors px-1.5 py-0.5 rounded bg-black/30">
+                          😊
                         </button>
-                      ))}
-                    </div>
-                  )}
-
-                  {/* Action buttons (hover) */}
-                  <div className="hidden group-hover:flex items-center gap-1 mt-1">
-                    <button onClick={() => setShowEmoji(showEmoji === msg.id ? null : msg.id)}
-                      className="text-xs text-gray-600 hover:text-yellow-400 transition-colors px-2 py-0.5 rounded hover:bg-yellow-900/10">
-                      😊 Réagir
-                    </button>
-                    <button onClick={() => setReplyTo(msg)}
-                      className="text-xs text-gray-600 hover:text-blue-400 transition-colors px-2 py-0.5 rounded hover:bg-blue-900/10">
-                      ↩ Répondre
-                    </button>
-                  </div>
-
-                  {/* Emoji picker */}
-                  {showEmoji === msg.id && (
-                    <div className="flex gap-1 mt-1 flex-wrap">
-                      {EMOJIS.map(e => (
-                        <button key={e} onClick={() => handleReaction(msg.id, e)}
-                          className="text-lg hover:scale-125 transition-transform">
-                          {e}
+                        <button onClick={() => { setReplyTo(msg); inputRef.current?.focus(); }}
+                          className="text-[11px] text-gray-600 hover:text-blue-400 transition-colors px-1.5 py-0.5 rounded bg-black/30">
+                          ↩
                         </button>
-                      ))}
+                      </div>
+
+                      {/* Emoji picker */}
+                      <AnimatePresence>
+                        {showEmoji === msg.id && (
+                          <motion.div
+                            initial={{ opacity: 0, scale: 0.8 }}
+                            animate={{ opacity: 1, scale: 1 }}
+                            exit={{ opacity: 0, scale: 0.8 }}
+                            className="flex gap-1.5 mt-1 p-2 rounded-xl bg-[#0F0F18] border border-red-900/30 shadow-xl"
+                          >
+                            {EMOJIS.map(e => (
+                              <button key={e} onClick={() => handleReaction(msg.id, e)}
+                                className="text-lg hover:scale-125 transition-transform">
+                                {e}
+                              </button>
+                            ))}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
                     </div>
-                  )}
-                </div>
-              </div>
-            ))}
+                  </motion.div>
+                );
+              })}
+            </AnimatePresence>
             <div ref={messagesEndRef} />
           </div>
 
-          {/* Input area */}
-          <div className="p-3 border-t border-red-900/20 glass-panel">
-            {replyTo && (
-              <div className="flex items-center gap-2 mb-2 px-3 py-1.5 bg-yellow-900/10 rounded-lg border border-yellow-900/30 text-xs">
-                <span className="text-gray-400">↩ Réponse à <strong className="text-yellow-400">{replyTo.author?.username}</strong></span>
-                <button onClick={() => setReplyTo(null)} className="ml-auto text-gray-500 hover:text-red-400">✕</button>
+          {/* Zone de saisie */}
+          <div className="p-3 border-t border-red-900/20 flex-shrink-0"
+            style={{ background: "rgba(10,10,15,0.95)", backdropFilter: "blur(10px)" }}>
+            {/* Réponse en cours */}
+            <AnimatePresence>
+              {replyTo && (
+                <motion.div
+                  initial={{ opacity: 0, height: 0 }}
+                  animate={{ opacity: 1, height: "auto" }}
+                  exit={{ opacity: 0, height: 0 }}
+                  className="flex items-center gap-2 mb-2 px-3 py-1.5 bg-yellow-900/10 rounded-xl border border-yellow-900/30 text-xs overflow-hidden"
+                >
+                  <div className="w-0.5 h-4 bg-yellow-600 rounded" />
+                  <span className="text-gray-400 truncate">
+                    <strong className="text-yellow-400">{replyTo.author?.username}</strong>: {replyTo.content}
+                  </span>
+                  <button onClick={() => setReplyTo(null)} className="ml-auto text-gray-500 hover:text-red-400 flex-shrink-0">✕</button>
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            {/* Suggestions @mention */}
+            <AnimatePresence>
+              {showMentions && filteredMentions.length > 0 && (
+                <motion.div
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: 10 }}
+                  className="mb-2 bg-[#0F0F18] border border-red-900/30 rounded-xl overflow-hidden shadow-xl"
+                >
+                  {filteredMentions.slice(0, 5).map((u: any) => (
+                    <button
+                      key={u}
+                      onClick={() => {
+                        const atIdx = message.lastIndexOf("@");
+                        setMessage(message.slice(0, atIdx) + `@${u} `);
+                        setShowMentions(false);
+                        inputRef.current?.focus();
+                      }}
+                      className="w-full text-left px-3 py-2 text-sm text-gray-200 hover:bg-yellow-900/20 hover:text-yellow-400 transition-colors flex items-center gap-2"
+                    >
+                      <span className="text-yellow-500">@</span>{u}
+                    </button>
+                  ))}
+                </motion.div>
+              )}
+            </AnimatePresence>
+
+            <form onSubmit={handleSend} className="flex items-center gap-2">
+              <div className="flex-1 relative">
+                <input
+                  ref={inputRef}
+                  data-testid="input-message"
+                  type="text"
+                  value={message}
+                  onChange={handleInputChange}
+                  placeholder="Message... (@ pour mentionner)"
+                  className="w-full px-4 py-3 rounded-full bg-[#0F0F18] border border-red-900/30 text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600/60 transition-colors text-sm pr-10"
+                />
               </div>
-            )}
-            <form onSubmit={handleSend} className="flex gap-2">
-              <input
-                data-testid="input-message"
-                type="text"
-                value={message}
-                onChange={e => setMessage(e.target.value)}
-                placeholder="Écrire un message..."
-                className="flex-1 px-4 py-3 rounded-lg bg-[#0F0F18] border border-red-900/30 text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 transition-colors text-sm"
-              />
-              <button
+              <motion.button
                 data-testid="button-send"
                 type="submit"
                 disabled={sendMutation.isPending || !message.trim()}
-                className="btn-ripple px-4 py-3 rounded-lg font-semibold text-white transition-all hover:scale-105 active:scale-95 disabled:opacity-40"
-                style={{ background: "linear-gradient(135deg, #8B0000, #CC0000)", border: "1px solid rgba(255,68,68,0.4)" }}
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                className="w-11 h-11 rounded-full flex items-center justify-center text-white disabled:opacity-40 transition-all flex-shrink-0"
+                style={{ background: "linear-gradient(135deg, #8B0000, #CC0000)", boxShadow: "0 0 15px rgba(204,0,0,0.4)" }}
               >
-                ➤
-              </button>
+                <svg viewBox="0 0 24 24" className="w-5 h-5 fill-current" style={{ transform: "rotate(45deg)" }}>
+                  <path d="M2 21L23 12 2 3v7l15 2-15 2z"/>
+                </svg>
+              </motion.button>
             </form>
           </div>
         </div>

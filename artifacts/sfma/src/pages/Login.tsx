@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { useLocation } from "wouter";
+import { motion } from "framer-motion";
 import { useLogin } from "@workspace/api-client-react";
 import { useAuth } from "@/context/AuthContext";
 import ParticleBackground from "@/components/ParticleBackground";
@@ -33,67 +34,104 @@ export default function Login() {
     <div className="relative min-h-screen flex items-center justify-center bg-[#0A0A0F] overflow-hidden">
       <ParticleBackground />
 
-      <div className="relative z-10 w-full max-w-sm px-6">
+      {/* Halo derrière le formulaire */}
+      <div className="absolute inset-0 flex items-center justify-center pointer-events-none">
+        <motion.div
+          animate={{ scale: [1, 1.1, 1], opacity: [0.1, 0.2, 0.1] }}
+          transition={{ duration: 4, repeat: Infinity }}
+          className="w-[500px] h-[500px] rounded-full"
+          style={{ background: "radial-gradient(circle, rgba(139,0,0,0.2) 0%, transparent 70%)" }}
+        />
+      </div>
+
+      <motion.div
+        initial={{ opacity: 0, y: 30, scale: 0.95 }}
+        animate={{ opacity: 1, y: 0, scale: 1 }}
+        transition={{ duration: 0.5, ease: "backOut" }}
+        className="relative z-10 w-full max-w-sm px-6"
+      >
         <div className="glass-panel rounded-2xl p-8 gold-border">
-          <div className="text-center mb-8">
-            <div className="w-16 h-16 mx-auto rounded-full flex items-center justify-center border border-yellow-600 mb-4 grade-founder"
-              style={{ background: "radial-gradient(circle, rgba(139,0,0,0.4), rgba(10,10,15,0.9))" }}>
-              <span className="text-3xl">⚜️</span>
-            </div>
-            <h1 className="sfma-title text-xl font-bold text-yellow-400">SFMA</h1>
-            <p className="text-gray-400 text-sm mt-1">Connexion au clan</p>
-          </div>
+          {/* Logo */}
+          <motion.div
+            initial={{ scale: 0 }}
+            animate={{ scale: 1 }}
+            transition={{ delay: 0.2, type: "spring", stiffness: 200 }}
+            className="text-center mb-8"
+          >
+            <motion.div
+              animate={{ boxShadow: ["0 0 15px rgba(201,162,39,0.3)", "0 0 40px rgba(201,162,39,0.6)", "0 0 15px rgba(201,162,39,0.3)"] }}
+              transition={{ duration: 3, repeat: Infinity }}
+              className="w-20 h-20 mx-auto rounded-full flex items-center justify-center border-2 border-yellow-600 mb-4"
+              style={{ background: "radial-gradient(circle, rgba(139,0,0,0.4), rgba(10,10,15,0.9))" }}
+            >
+              <span className="text-4xl">⚜️</span>
+            </motion.div>
+            <h1 className="sfma-title text-2xl font-bold text-yellow-400 tracking-widest">SFMA</h1>
+            <p className="text-gray-500 text-sm mt-1">Accès réservé aux membres</p>
+          </motion.div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
-            <div>
-              <label className="block text-gray-300 text-sm mb-1">Pseudo</label>
-              <input
-                data-testid="input-username"
-                type="text"
-                value={username}
-                onChange={e => setUsername(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg bg-[#0F0F18] border border-red-900/40 text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 focus:ring-1 focus:ring-yellow-600 transition-colors"
-                placeholder="Votre pseudo"
-                required
-              />
-            </div>
-            <div>
-              <label className="block text-gray-300 text-sm mb-1">Mot de passe</label>
-              <input
-                data-testid="input-password"
-                type="password"
-                value={password}
-                onChange={e => setPassword(e.target.value)}
-                className="w-full px-4 py-3 rounded-lg bg-[#0F0F18] border border-red-900/40 text-white placeholder-gray-600 focus:outline-none focus:border-yellow-600 focus:ring-1 focus:ring-yellow-600 transition-colors"
-                placeholder="••••••••"
-                required
-              />
-            </div>
+            {[
+              { label: "Pseudo", value: username, set: setUsername, type: "text", testId: "input-username", placeholder: "Votre pseudo" },
+              { label: "Mot de passe", value: password, set: setPassword, type: "password", testId: "input-password", placeholder: "••••••••" },
+            ].map((field, i) => (
+              <motion.div
+                key={field.label}
+                initial={{ opacity: 0, x: -20 }}
+                animate={{ opacity: 1, x: 0 }}
+                transition={{ delay: 0.3 + i * 0.1 }}
+              >
+                <label className="block text-gray-400 text-xs mb-1.5 sfma-title tracking-wider">{field.label.toUpperCase()}</label>
+                <input
+                  data-testid={field.testId}
+                  type={field.type}
+                  value={field.value}
+                  onChange={e => field.set(e.target.value)}
+                  className="w-full px-4 py-3 rounded-xl bg-[#0F0F18] border border-red-900/40 text-white placeholder-gray-700 focus:outline-none focus:border-yellow-600/60 focus:ring-1 focus:ring-yellow-600/30 transition-all text-sm"
+                  placeholder={field.placeholder}
+                  required
+                />
+              </motion.div>
+            ))}
 
             {error && (
-              <div className="text-red-400 text-sm text-center bg-red-900/20 rounded-lg py-2 px-3 border border-red-800/40">
-                {error}
-              </div>
+              <motion.div
+                initial={{ opacity: 0, scale: 0.95 }}
+                animate={{ opacity: 1, scale: 1 }}
+                className="text-red-400 text-sm text-center bg-red-900/20 rounded-xl py-2.5 px-3 border border-red-800/40"
+              >
+                ⚠️ {error}
+              </motion.div>
             )}
 
-            <button
+            <motion.button
               data-testid="button-submit-login"
               type="submit"
               disabled={loginMutation.isPending}
-              className="btn-ripple w-full py-3 rounded-lg font-semibold text-white transition-all duration-200 hover:scale-105 active:scale-95 disabled:opacity-50"
+              whileHover={{ scale: 1.03, boxShadow: "0 0 30px rgba(204,0,0,0.5)" }}
+              whileTap={{ scale: 0.97 }}
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.5 }}
+              className="w-full py-3.5 rounded-xl font-bold text-white disabled:opacity-50 sfma-title tracking-widest text-sm"
               style={{ background: "linear-gradient(135deg, #8B0000, #CC0000)", border: "1px solid rgba(255,68,68,0.4)", boxShadow: "0 0 20px rgba(204,0,0,0.3)" }}
             >
-              {loginMutation.isPending ? "Connexion..." : "Se connecter"}
-            </button>
+              {loginMutation.isPending ? "⏳ CONNEXION..." : "🔑 SE CONNECTER"}
+            </motion.button>
           </form>
 
-          <div className="mt-6 text-center">
-            <a href="/apply" className="text-yellow-600 hover:text-yellow-400 text-sm transition-colors">
-              Pas encore membre ? Faire une candidature
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            transition={{ delay: 0.7 }}
+            className="mt-6 text-center"
+          >
+            <a href="/apply" className="text-yellow-700 hover:text-yellow-400 text-xs transition-colors sfma-title tracking-wider">
+              Pas encore membre ? → Faire une candidature
             </a>
-          </div>
+          </motion.div>
         </div>
-      </div>
+      </motion.div>
     </div>
   );
 }
